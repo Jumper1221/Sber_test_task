@@ -1,3 +1,4 @@
+import sys
 from typing import AsyncGenerator
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -20,3 +21,7 @@ async_session_maker = async_sessionmaker(
 async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
     async with async_session_maker() as session:
         yield session
+
+
+if "alembic" in sys.modules:
+    from app.models import models  # noqa: F401
