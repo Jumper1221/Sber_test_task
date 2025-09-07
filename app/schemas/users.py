@@ -1,5 +1,6 @@
 from datetime import datetime
 from decimal import Decimal
+from typing import Optional
 from uuid import UUID
 
 from pydantic import BaseModel, EmailStr
@@ -14,3 +15,12 @@ class UserRead(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class UserUpdate(BaseModel):
+    full_name: Optional[str] = None
+    email: Optional[EmailStr] = None
+
+
+class BalanceUpdate(BaseModel):
+    amount: float
