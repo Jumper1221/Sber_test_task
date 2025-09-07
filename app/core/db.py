@@ -24,4 +24,8 @@ async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
 
 
 if "alembic" in sys.modules:
-    from app.models import models  # noqa: F401
+    from app.models import (
+        models,  # noqa: F401
+        token,  # noqa: F401
+        verification_code,  # noqa: F401
+    )

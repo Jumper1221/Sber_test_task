@@ -5,6 +5,7 @@ from logging.config import dictConfig
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app import all_models  # noqa: F401
 from app.routers import auth, payments, users
 from app.utils.lg import logging_config
 

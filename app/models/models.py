@@ -5,7 +5,7 @@ import enum
 import uuid
 from datetime import datetime
 from decimal import Decimal
-from typing import List, Optional
+from typing import TYPE_CHECKING, List, Optional
 
 from sqlalchemy import (
     Boolean,
@@ -27,6 +27,11 @@ from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.db import Base
+
+if TYPE_CHECKING:
+    from app.models.token import RefreshToken
+    from app.models.verification_code import VerificationCode
+
 
 # Recommended naming convention for Alembic migrations
 NAMING_CONVENTION = {
@@ -54,9 +59,7 @@ class User(Base):
     __tablename__ = "users"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        PG_UUID(as_uuid=True),
-        primary_key=True,
-        default=uuid.uuid4,
+        PG_UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
     email: Mapped[str] = mapped_column(
         String(255), unique=True, nullable=False, index=True
@@ -66,6 +69,7 @@ class User(Base):
     is_active: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default=text("true")
     )
+    is_verified_email: Mapped[bool] = mapped_column(default=False)
     balance: Mapped[Decimal] = mapped_column(
         Numeric(14, 2), nullable=False, server_default=text("0")
     )
@@ -93,6 +97,14 @@ class User(Base):
         back_populates="performed_by_user",
         foreign_keys="[PaymentLog.performed_by]",
         lazy="selectin",
+    )
+
+    verification_codes: Mapped[list["VerificationCode"]] = relationship(
+        "VerificationCode", back_populates="user", cascade="all, delete-orphan"
+    )
+
+    refresh_tokens: Mapped[list["RefreshToken"]] = relationship(
+        "RefreshToken", back_populates="user"
     )
 
 
@@ -237,34 +249,3 @@ class PaymentLog(Base):
     __table_args__ = (
         Index("ix_payment_logs_payment_id_created_at", "payment_id", "created_at"),
     )
-
-
-class RefreshToken(Base):
-    """
-    (Опционально) Модель для хранения refresh-токенов, если используется схема с long-lived tokens.
-    Для JWT без хранения — не нужна. Хранить только хеш токена (не сам токен в открытом виде).
-    """
-
-    __tablename__ = "refresh_tokens"
-
-    id: Mapped[uuid.UUID] = mapped_column(
-        PG_UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
-    user_id: Mapped[uuid.UUID] = mapped_column(
-        PG_UUID(as_uuid=True),
-        ForeignKey("users.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
-    )
-    token_hash: Mapped[str] = mapped_column(String(255), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
-    )
-    expires_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
-    )
-    revoked: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, server_default=text("false")
-    )
-
-    user: Mapped["User"] = relationship("User", lazy="joined")
