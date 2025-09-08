@@ -67,7 +67,7 @@ class User(Base):
     full_name: Mapped[str] = mapped_column(String(255), nullable=False)
     hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
     is_active: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, server_default=text("true")
+        Boolean, nullable=False, server_default=text("true"), default=True
     )
     is_verified_email: Mapped[bool] = mapped_column(default=False)
     balance: Mapped[Decimal] = mapped_column(
@@ -107,6 +107,8 @@ class User(Base):
         "RefreshToken", back_populates="user"
     )
 
+    def __repr__(self) -> str:
+        return f"<User(id={self.id}, email={self.email})>"
 
 class Payment(Base):
     """
@@ -167,7 +169,7 @@ class Payment(Base):
 
     # Поле для optimistic locking — SQLAlchemy будет поддерживать version_id_col
     version: Mapped[int] = mapped_column(
-        Integer, nullable=False, server_default=text("1")
+        Integer, nullable=False, server_default=text("1"), default=1
     )
 
     # Отношения

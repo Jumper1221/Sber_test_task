@@ -4,10 +4,10 @@ from uuid import UUID
 from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.models.models import Payment, PaymentLog, PaymentStatus, User
 from app.schemas.payments import PaymentCreate, PaymentFilter, PaymentUpdate
-from sqlalchemy.orm import selectinload
 
 
 async def create_payment(
@@ -28,6 +28,7 @@ async def create_payment(
         card_last4=data.card_last4,
         card_holder=data.card_holder,
         amount=data.amount,
+        status=PaymentStatus.CREATED,
     )
     session.add(payment)
     await session.commit()
@@ -164,29 +165,29 @@ async def update_payment(
     """
     Update payment status.
     """
-    async with session.begin():
-        stmt = select(Payment).where(Payment.id == payment_id).with_for_update()
-        result = await session.execute(stmt)
-        payment = result.scalar_one_or_none()
-        if not payment:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="Payment not found"
-            )
-
-        # Store previous status for logging
-        prev_status = payment.status
-        payment.status = PaymentStatus(data.status.value)
-
-        # Log the change
-        log = PaymentLog(
-            payment_id=payment.id,
-            performed_by=user.id,
-            prev_status=prev_status,
-            new_status=data.status,
-            amount=payment.amount,
-            note=f"Payment status updated to {data.status.value}",
+    # Start a transaction
+    stmt = select(Payment).where(Payment.id == payment_id).with_for_update()
+    result = await session.execute(stmt)
+    payment = result.scalar_one_or_none()
+    if not payment:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Payment not found"
         )
-        session.add(log)
+
+    # Store previous status for logging
+    prev_status = payment.status
+    payment.status = PaymentStatus(data.status.value)
+
+    # Log the change
+    log = PaymentLog(
+        payment_id=payment.id,
+        performed_by=user.id,
+        prev_status=prev_status,
+        new_status=data.status,
+        amount=payment.amount,
+        note=f"Payment status updated to {data.status.value}",
+    )
+    session.add(log)
 
     await session.commit()
     await session.refresh(payment)
@@ -197,33 +198,33 @@ async def delete_payment(session: AsyncSession, payment_id: UUID, user: User) ->
     """
     Delete payment (only if it's in CREATED status).
     """
-    async with session.begin():
-        stmt = select(Payment).where(Payment.id == payment_id).with_for_update()
-        result = await session.execute(stmt)
-        payment = result.scalar_one_or_none()
-        if not payment:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="Payment not found"
-            )
-
-        if payment.status != PaymentStatus.CREATED:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Cannot delete payment that is not in CREATED status",
-            )
-
-        # Log the deletion
-        log = PaymentLog(
-            payment_id=payment.id,
-            performed_by=user.id,
-            prev_status=payment.status,
-            new_status=payment.status,  # Same status since we're deleting
-            amount=payment.amount,
-            note="Payment deleted",
+    # Start a transaction
+    stmt = select(Payment).where(Payment.id == payment_id).with_for_update()
+    result = await session.execute(stmt)
+    payment = result.scalar_one_or_none()
+    if not payment:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Payment not found"
         )
-        session.add(log)
 
-        await session.delete(payment)
+    if payment.status != PaymentStatus.CREATED:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot delete payment that is not in CREATED status",
+        )
+
+    # Log the deletion
+    log = PaymentLog(
+        payment_id=payment.id,
+        performed_by=user.id,
+        prev_status=payment.status,
+        new_status=payment.status,  # Same status since we're deleting
+        amount=payment.amount,
+        note="Payment deleted",
+    )
+    session.add(log)
+
+    await session.delete(payment)
 
     await session.commit()
     return True
@@ -247,16 +248,14 @@ async def get_payments_by_user_id(
     # Get payments where the user is either the sender or recipient
     stmt = (
         select(Payment)
-        .where(
-            (Payment.sender_id == user_id) | (Payment.recipient_id == user_id)
-        )
+        .where((Payment.sender_id == user_id) | (Payment.recipient_id == user_id))
         .options(
             selectinload(Payment.sender),
             selectinload(Payment.recipient),
         )
         .order_by(Payment.created_at.desc())
     )
-    
+
     result = await session.execute(stmt)
     payments = list(result.scalars().all())
     return payments
