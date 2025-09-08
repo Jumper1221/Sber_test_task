@@ -7,7 +7,7 @@ from pydantic import BaseModel, EmailStr
 
 
 class UserRead(BaseModel):
-    id: int
+    id: uuid.UUID
     email: EmailStr
     full_name: str
     balance: Decimal
@@ -40,7 +40,7 @@ class UserLoginResponse(BaseModel):
 
 
 class UserBasicResponse(BaseModel):
-    id: int
+    id: uuid.UUID
     username: str
     email: str
 

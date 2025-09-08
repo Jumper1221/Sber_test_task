@@ -146,7 +146,11 @@ class Payment(Base):
 
     amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
     status: Mapped[PaymentStatus] = mapped_column(
-        SAEnum(PaymentStatus, name="payment_status"),
+        SAEnum(
+            PaymentStatus,
+            name="payment_status",
+            values_callable=lambda enum: [e.value for e in enum],
+        ),
         nullable=False,
         server_default=PaymentStatus.CREATED.value,
     )
@@ -225,10 +229,18 @@ class PaymentLog(Base):
     )
 
     prev_status: Mapped[PaymentStatus] = mapped_column(
-        SAEnum(PaymentStatus, name="payment_status"), nullable=False
+        SAEnum(
+            PaymentStatus,
+            name="payment_status",
+            values_callable=lambda enum: [e.value for e in enum],
+        ),
     )
     new_status: Mapped[PaymentStatus] = mapped_column(
-        SAEnum(PaymentStatus, name="payment_status"), nullable=False
+        SAEnum(
+            PaymentStatus,
+            name="payment_status",
+            values_callable=lambda enum: [e.value for e in enum],
+        ),
     )
 
     amount: Mapped[Optional[Decimal]] = mapped_column(Numeric(14, 2), nullable=True)

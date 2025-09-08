@@ -20,6 +20,7 @@ from app.services.payments import (
     delete_payment,
     get_payment_by_id,
     get_payment_logs,
+    get_payments_by_user_id,
     list_payments,
     update_payment,
 )
@@ -168,3 +169,19 @@ async def get_logs(
         }
         for log in logs
     ]
+
+
+@router.get("/user/{user_id}", response_model=List[PaymentRead])
+async def get_payments_for_user(
+    user_id: UUID = Path(..., description="ID пользователя"),
+    session: AsyncSession = Depends(get_async_session),
+    current_user=Depends(get_current_user),
+):
+    """
+    Get all payments for a given user ID.
+    Only the user themselves can access this information.
+    """
+    payments = await get_payments_by_user_id(
+        session=session, user_id=user_id, current_user=current_user
+    )
+    return payments

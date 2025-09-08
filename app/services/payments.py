@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.models import Payment, PaymentLog, PaymentStatus, User
 from app.schemas.payments import PaymentCreate, PaymentFilter, PaymentUpdate
+from sqlalchemy.orm import selectinload
 
 
 async def create_payment(
@@ -37,52 +38,49 @@ async def create_payment(
 async def confirm_payment(
     session: AsyncSession, payment_id: UUID, user: User
 ) -> Payment:
-    async with session.begin():
-        stmt = select(Payment).where(Payment.id == payment_id).with_for_update()
-        result = await session.execute(stmt)
-        payment = result.scalar_one_or_none()
-        if not payment:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="Payment not found"
-            )
-
-        if payment.status in {PaymentStatus.PAID, PaymentStatus.CANCELED}:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Payment already finalized",
-            )
-
-        # Проверка баланса отправителя
-        sender_stmt = select(User).where(User.id == payment.sender_id).with_for_update()
-        sender_result = await session.execute(sender_stmt)
-        sender = sender_result.scalar_one()
-        if sender.balance < payment.amount:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="Insufficient balance"
-            )
-
-        # Получатель
-        recipient_stmt = (
-            select(User).where(User.id == payment.recipient_id).with_for_update()
+    stmt = select(Payment).where(Payment.id == payment_id)
+    result = await session.execute(stmt)
+    payment = result.scalar_one_or_none()
+    if not payment:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Payment not found"
         )
-        recipient_result = await session.execute(recipient_stmt)
-        recipient = recipient_result.scalar_one()
 
-        # Обновление статуса и балансов
-        payment.status = PaymentStatus.PAID
-        sender.balance -= payment.amount
-        recipient.balance += payment.amount
-
-        # Логируем изменение
-        log = PaymentLog(
-            payment_id=payment.id,
-            performed_by=user.id,
-            prev_status=PaymentStatus.CREATED,
-            new_status=PaymentStatus.PAID,
-            amount=payment.amount,
-            note="Payment confirmed",
+    if payment.status in {PaymentStatus.PAID, PaymentStatus.CANCELED}:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Payment already finalized",
         )
-        session.add(log)
+
+    # Проверка баланса отправителя
+    sender_stmt = select(User).where(User.id == payment.sender_id)
+    sender_result = await session.execute(sender_stmt)
+    sender = sender_result.scalar_one()
+    if sender.balance < payment.amount:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Insufficient balance"
+        )
+
+    # Получатель
+    recipient_stmt = select(User).where(User.id == payment.recipient_id)
+    recipient_result = await session.execute(recipient_stmt)
+    recipient = recipient_result.scalar_one()
+
+    # Обновление статуса и балансов
+    payment.status = PaymentStatus.PAID
+    sender.balance -= payment.amount
+    recipient.balance += payment.amount
+
+    # Логируем изменение
+    log = PaymentLog(
+        payment_id=payment.id,
+        performed_by=user.id,
+        prev_status=PaymentStatus.CREATED,
+        new_status=PaymentStatus.PAID,
+        amount=payment.amount,
+        note="Payment confirmed",
+    )
+    session.add(log)
 
     await session.commit()
     await session.refresh(payment)
@@ -92,32 +90,31 @@ async def confirm_payment(
 async def cancel_payment(
     session: AsyncSession, payment_id: UUID, user: User
 ) -> Payment:
-    async with session.begin():
-        stmt = select(Payment).where(Payment.id == payment_id).with_for_update()
-        result = await session.execute(stmt)
-        payment = result.scalar_one_or_none()
-        if not payment:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="Payment not found"
-            )
-
-        if payment.status in {PaymentStatus.PAID, PaymentStatus.CANCELED}:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Payment already finalized",
-            )
-
-        payment.status = PaymentStatus.CANCELED
-
-        log = PaymentLog(
-            payment_id=payment.id,
-            performed_by=user.id,
-            prev_status=PaymentStatus.CREATED,
-            new_status=PaymentStatus.CANCELED,
-            amount=payment.amount,
-            note="Payment canceled",
+    stmt = select(Payment).where(Payment.id == payment_id)
+    result = await session.execute(stmt)
+    payment = result.scalar_one_or_none()
+    if not payment:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Payment not found"
         )
-        session.add(log)
+
+    if payment.status in {PaymentStatus.PAID, PaymentStatus.CANCELED}:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Payment already finalized",
+        )
+
+    payment.status = PaymentStatus.CANCELED
+
+    log = PaymentLog(
+        payment_id=payment.id,
+        performed_by=user.id,
+        prev_status=PaymentStatus.CREATED,
+        new_status=PaymentStatus.CANCELED,
+        amount=payment.amount,
+        note="Payment canceled",
+    )
+    session.add(log)
 
     await session.commit()
     await session.refresh(payment)
@@ -230,3 +227,36 @@ async def delete_payment(session: AsyncSession, payment_id: UUID, user: User) ->
 
     await session.commit()
     return True
+
+
+async def get_payments_by_user_id(
+    session: AsyncSession, user_id: UUID, current_user: User
+) -> List[Payment]:
+    """
+    Get all payments for a given user ID.
+    Only the user themselves or an admin can access this information.
+    """
+    # Authorization check - for now, only allow the user themselves
+    # In a production environment, we would also allow admins
+    if current_user.id != user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to view payments for this user",
+        )
+
+    # Get payments where the user is either the sender or recipient
+    stmt = (
+        select(Payment)
+        .where(
+            (Payment.sender_id == user_id) | (Payment.recipient_id == user_id)
+        )
+        .options(
+            selectinload(Payment.sender),
+            selectinload(Payment.recipient),
+        )
+        .order_by(Payment.created_at.desc())
+    )
+    
+    result = await session.execute(stmt)
+    payments = list(result.scalars().all())
+    return payments

@@ -30,7 +30,7 @@ class PaymentCreate(PaymentBase):
 class PaymentRead(BaseModel):
     id: UUID
     sender_id: UUID
-    recipient_id: int
+    recipient_id: UUID
     card_last4: str
     card_holder: str
     amount: Decimal
