@@ -19,6 +19,7 @@ services:
     command: uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     depends_on:
       - postgres
+      - migrations
     restart: unless-stopped
     volumes:
       - ./app:/app/app

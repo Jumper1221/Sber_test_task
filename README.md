@@ -63,16 +63,9 @@
 └── .env.example
 ```
 
-## Тестирование
-
-Запуск unit-тестов:
-```powershell
-python -m pytest
-```
-
 ## Дополнительно
 
-- Миграции: `alembic upgrade head`
+- Миграции реализованы отдельным контейнером в докере
 - Логи: `docker logs <container_name>`
 - Возможна интеграция с Celery/Redis, mock-платежным шлюзом, CI/CD.
 
