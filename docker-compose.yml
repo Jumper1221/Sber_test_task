@@ -28,6 +28,8 @@ services:
     build: .
     env_file:
       - .env
+    environment:
+      - DOCKER_MIGRATIONS=true
     depends_on:
       postgres:
         condition: service_healthy
