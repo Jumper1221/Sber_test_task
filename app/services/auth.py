@@ -66,7 +66,7 @@ async def register(db: AsyncSession, data: UserRegistration) -> UserBasicRespons
 #     hashed_password = get_password_hash(data.password)
 #     user = User(
 #         email=data.email,
-#         full_name=data.full_name,
+#         username=data.username,
 #         hashed_password=hashed_password,
 #     )
 #     session.add(user)
@@ -115,8 +115,8 @@ async def update_user_profile(
         )
 
     # Update fields if provided
-    if data.full_name is not None:
-        user.full_name = data.full_name
+    if data.username is not None:
+        user.username = data.username
     if data.email is not None:
         # Check if email is already taken by another user
         email_stmt = select(User).where(User.email == data.email, User.id != user_id)
@@ -161,7 +161,7 @@ async def login(
 ) -> LoginResponse:
     user = await db.execute(
         select(User).where(
-            (User.full_name == username_or_email) | (User.email == username_or_email)
+            (User.username == username_or_email) | (User.email == username_or_email)
         )
     )
 
@@ -186,7 +186,7 @@ async def login(
         token_type="bearer",
         user=UserLoginResponse(
             email=user.email,
-            username=user.full_name,
+            username=user.username,
             id=user.id,
         ),
     )

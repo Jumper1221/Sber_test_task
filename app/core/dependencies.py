@@ -76,10 +76,10 @@ async def find_uniquiness_conflicts(
     """Check if the username, email, or phone already exists in the database."""
 
     query = (
-        select(User.full_name, User.email)
+        select(User.username, User.email)
         .where(
             or_(
-                func.lower(User.full_name) == func.lower(username),
+                func.lower(User.username) == func.lower(username),
                 func.lower(User.email) == func.lower(email),
             )
         )

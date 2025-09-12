@@ -7,6 +7,7 @@ requires-python = ">=3.11"
 dependencies = [
     "alembic>=1.16.5",
     "asyncpg>=0.30.0",
+    "bcrypt==4.0.1",
     "fastapi[all]>=0.116.1",
     "gunicorn>=23.0.0",
     "passlib[bcrypt]>=1.7.4",
@@ -18,7 +19,13 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["ruff", "pytest", "pytest-asyncio", "httpx"]
+dev = [
+    "ruff", 
+    "pytest", 
+    "pytest-asyncio", 
+    "httpx", 
+    "testcontainers[postgres]"
+]
 
 
 [tool.ruff]
@@ -57,8 +64,12 @@ ignore = ["B008"]
 [tool.ruff.format]
 quote-style = "double"
 
+
 [dependency-groups]
 dev = [
+    "pytest-asyncio>=1.1.0",
+    "pytest-mock>=3.15.0",
+    "pytest-order>=1.3.0",
     "ruff>=0.12.8",
+    "testcontainers[postgres]>=4.13.0",
 ]
-
