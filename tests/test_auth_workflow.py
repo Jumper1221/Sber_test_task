@@ -47,11 +47,41 @@ class TestAuthWorkflow:
 
         token_data = response.json()
         assert "access_token" in token_data
+        assert "refresh_token" in token_data
 
-        # Сохраняем токен в общий словарь
+        # Сохраняем токены в общий словарь
         workflow_state["access_token"] = token_data["access_token"]
+        workflow_state["refresh_token"] = token_data["refresh_token"]
 
     @pytest.mark.order(3)
+    async def test_refresh_token(self, class_client: AsyncClient, workflow_state: dict):
+        """Тест 4: Обновление токена. Берем refresh_token из фикстуры."""
+        assert "refresh_token" in workflow_state, "Refresh token not found in state"
+        assert "access_token" in workflow_state, "Access token not found in state"
+        refresh_token = workflow_state["refresh_token"]
+        access_token = workflow_state["access_token"]
+
+        headers = {"Authorization": f"Bearer {access_token}"}
+        response = await class_client.post(
+            "/auth/refresh",
+            headers=headers,
+            json={
+                "refresh_token": refresh_token,
+            },
+        )
+
+        assert response.status_code == 200, response.text
+        token_data = response.json()
+        assert "access_token" in token_data
+        assert "refresh_token" in token_data
+        assert "token_type" in token_data
+        assert token_data["token_type"] == "bearer"
+
+        # Обновляем токены в общем словаре
+        workflow_state["access_token"] = token_data["access_token"]
+        workflow_state["refresh_token"] = token_data["refresh_token"]
+
+    @pytest.mark.order(4)
     async def test_get_self_profile(
         self, class_client: AsyncClient, workflow_state: dict
     ):
@@ -69,3 +99,11 @@ class TestAuthWorkflow:
         assert profile_data["username"] == user_data["username"]
         assert profile_data["id"] == user_data["id"]
         assert profile_data["balance"] == "0.00"
+
+    @pytest.mark.order(5)
+    async def test_logout(self, class_client: AsyncClient, workflow_state: dict):
+        """Тест 5: Логаут."""
+
+        response = await class_client.post("/auth/logout")
+
+        assert response.status_code == 204, response.text
